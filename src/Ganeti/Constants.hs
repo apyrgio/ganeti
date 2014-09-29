@@ -1208,8 +1208,11 @@ ddmModify = Types.ddmFullToRaw DdmFullModify
 ddmRemove :: String
 ddmRemove = Types.ddmFullToRaw DdmFullRemove
 
+ddmDetach :: String
+ddmDetach = Types.ddmFullToRaw DdmFullDetach
+
 ddmsValues :: FrozenSet String
-ddmsValues = ConstantUtils.mkSet [ddmAdd, ddmRemove]
+ddmsValues = ConstantUtils.mkSet [ddmAdd, ddmRemove, ddmDetach]
 
 ddmsValuesWithModify :: FrozenSet String
 ddmsValuesWithModify = ConstantUtils.mkSet $ map Types.ddmFullToRaw [minBound..]

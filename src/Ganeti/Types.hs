@@ -420,6 +420,7 @@ $(THH.makeJSONInstance ''CVErrorCode)
 $(THH.declareLADT ''String "DdmSimple"
      [ ("DdmSimpleAdd",    "add")
      , ("DdmSimpleRemove", "remove")
+     , ("DdmSimpleDetach", "detach")
      ])
 $(THH.makeJSONInstance ''DdmSimple)
 
@@ -429,6 +430,7 @@ $(THH.makeJSONInstance ''DdmSimple)
 $(THH.declareLADT ''String "DdmFull"
      [ ("DdmFullAdd",    "add")
      , ("DdmFullRemove", "remove")
+     , ("DdmFullDetach", "detach")
      , ("DdmFullModify", "modify")
      ])
 $(THH.makeJSONInstance ''DdmFull)
