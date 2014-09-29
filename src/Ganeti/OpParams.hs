@@ -401,6 +401,7 @@ $(buildObject "IDiskParams" "idisk"
   , optionalField $ simpleField C.idiskProvider [t| NonEmptyString |]
   , optionalField $ simpleField C.idiskSpindles [t| Int          |]
   , optionalField $ simpleField C.idiskAccess   [t| NonEmptyString |]
+  , optionalField $ simpleField C.idiskUuid     [t| String |]
   , andRestArguments "opaque"
   ])
 
