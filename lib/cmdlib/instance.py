@@ -2541,7 +2541,7 @@ def GetItemFromContainer(identifier, kind, container):
 
 def _ApplyContainerMods(kind, container, chgdesc, mods,
                         create_fn, modify_fn, remove_fn,
-                        post_add_fn=None):
+                        detach_fn, post_add_fn=None):
   """Applies descriptions in C{mods} to C{container}.
 
   @type kind: string
@@ -2613,7 +2613,7 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
       # Retrieve existing item
       (absidx, item) = GetItemFromContainer(identifier, kind, container)
 
-      if op in (constants.DDM_REMOVE, constants.DDM_DETACH):
+      if op == constants.DDM_REMOVE:
         assert not params
 
         changes = [("%s/%s" % (kind, absidx), "remove")]
@@ -2625,6 +2625,19 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
 
         assert container[absidx] == item
         del container[absidx]
+      elif op == constants.DDM_DETACH:
+        assert not params
+
+        changes = [("%s/%s" % (kind, absidx), "remove")]
+
+        if detach_fn is not None:
+          msg = detach_fn(absidx, item, private)
+          if msg:
+            changes.append(("%s/%s" % (kind, absidx), msg))
+
+        ## FIXME: Should we add the two lines below?
+        #assert container[absidx] == item
+        #del container[absidx]
       elif op == constants.DDM_MODIFY:
         if modify_fn is not None:
           changes = modify_fn(absidx, item, params, private)
@@ -3270,7 +3283,7 @@ class LUInstanceSetParams(LogicalUnit):
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     disks = copy.deepcopy(inst_disks)
     _ApplyContainerMods("disk", disks, None, self.diskmod, None,
-                        _PrepareDiskMod, None)
+                        _PrepareDiskMod, None, None)
     utils.ValidateDeviceNames("disk", disks)
     if len(disks) > constants.MAX_DISKS:
       raise errors.OpPrereqError("Instance has too many disks (%d), cannot add"
@@ -3644,7 +3657,8 @@ class LUInstanceSetParams(LogicalUnit):
     # Verify NIC changes (operating on copy)
     nics = [nic.Copy() for nic in self.instance.nics]
     _ApplyContainerMods("NIC", nics, None, self.nicmod,
-                        _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove)
+                        _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove,
+                        None)
     if len(nics) > constants.MAX_NICS:
       raise errors.OpPrereqError("Instance has too many network interfaces"
                                  " (%d), cannot add more" % constants.MAX_NICS,
@@ -3657,7 +3671,7 @@ class LUInstanceSetParams(LogicalUnit):
       nics = [nic.Copy() for nic in self.instance.nics]
       _ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
                           self._CreateNewNic, self._ApplyNicMods,
-                          self._RemoveNic)
+                          self._RemoveNic, None)
       # Verify that NIC names are unique and valid
       utils.ValidateDeviceNames("NIC", nics)
       self._new_nics = nics
@@ -4111,6 +4125,12 @@ class LUInstanceSetParams(LogicalUnit):
 
     return hotmsg
 
+  def _DetachDisk(self, idx, root, _):
+    """Detaches a disk.
+
+    """
+    raise Exception("So, it has come to this")
+
   def _CreateNewNic(self, idx, params, private):
     """Creates data structure for a new network interface.
 
@@ -4213,7 +4233,8 @@ class LUInstanceSetParams(LogicalUnit):
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     _ApplyContainerMods("disk", inst_disks, result, self.diskmod,
                         self._CreateNewDisk, self._ModifyDisk,
-                        self._RemoveDisk, post_add_fn=self._PostAddDisk)
+                        self._RemoveDisk, self._DetachDisk,
+                        post_add_fn=self._PostAddDisk)
 
     if self.op.disk_template:
       if __debug__:
