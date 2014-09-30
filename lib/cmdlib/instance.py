@@ -2613,7 +2613,7 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
       # Retrieve existing item
       (absidx, item) = GetItemFromContainer(identifier, kind, container)
 
-      if op == constants.DDM_REMOVE:
+      if op in (constants.DDM_REMOVE, constants.DDM_DETACH):
         assert not params
 
         changes = [("%s/%s" % (kind, absidx), "remove")]
@@ -2655,7 +2655,8 @@ class LUInstanceSetParams(LogicalUnit):
 
       addremove = 0
       for op, params in mods:
-        if op in (constants.DDM_ADD, constants.DDM_REMOVE):
+        if op in (constants.DDM_ADD, constants.DDM_REMOVE,
+                  constants.DDM_DETACH):
           result.append((op, -1, params))
           addremove += 1
 
@@ -2685,10 +2686,10 @@ class LUInstanceSetParams(LogicalUnit):
       if key_types:
         utils.ForceDictType(params, key_types)
 
-      if op == constants.DDM_REMOVE:
+      if op in (constants.DDM_REMOVE, constants.DDM_DETACH):
         if params:
           raise errors.OpPrereqError("No settings should be passed when"
-                                     " removing a %s" % kind,
+                                     " removing or detaching a %s" % kind,
                                      errors.ECODE_INVAL)
       elif op in (constants.DDM_ADD, constants.DDM_MODIFY):
         item_fn(op, params)
@@ -3335,6 +3336,7 @@ class LUInstanceSetParams(LogicalUnit):
                 constants.INIC_NETWORK:
                   cfg.GetInstanceCommunicationNetwork()}
     elif not instance_communication and instance_communication_nic:
+      # FIXME: Should we add DDM_DETACH here?
       action = constants.DDM_REMOVE
       params = None
     else:
