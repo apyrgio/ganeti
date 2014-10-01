@@ -4129,7 +4129,28 @@ class LUInstanceSetParams(LogicalUnit):
     """Detaches a disk.
 
     """
-    raise Exception("So, it has come to this")
+    hotmsg = ""
+    if self.op.hotplug:
+      hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                                   constants.HOTPLUG_TARGET_DISK,
+                                   root, None, idx)
+      ShutdownInstanceDisks(self, self.instance, [root])
+
+    ## The below commands destroy the disk, if I understand correctly.
+    ## Therefore, they should not be used in the "detach" action.
+    #RemoveDisks(self, self.instance, disks=[root])
+
+    ## if this is a DRBD disk, return its port to the pool
+    #if root.dev_type in constants.DTS_DRBD:
+    #  self.cfg.AddTcpUdpPort(root.logical_id[2])
+
+    # Remove disk from config
+    self.cfg.RemoveInstanceDisk(self.instance.uuid, root.uuid)
+
+    # re-read the instance from the configuration
+    self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
+
+    return hotmsg
 
   def _CreateNewNic(self, idx, params, private):
     """Creates data structure for a new network interface.
