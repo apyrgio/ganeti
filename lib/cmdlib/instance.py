@@ -2635,9 +2635,9 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
           if msg:
             changes.append(("%s/%s" % (kind, absidx), msg))
 
-        ## FIXME: Should we add the two lines below?
-        #assert container[absidx] == item
-        #del container[absidx]
+        # FIXME: Should we add the two lines below?
+        assert container[absidx] == item
+        del container[absidx]
       elif op == constants.DDM_MODIFY:
         if modify_fn is not None:
           changes = modify_fn(absidx, item, params, private)
@@ -4145,7 +4145,7 @@ class LUInstanceSetParams(LogicalUnit):
     #  self.cfg.AddTcpUdpPort(root.logical_id[2])
 
     # Remove disk from config
-    self.cfg.RemoveInstanceDisk(self.instance.uuid, root.uuid)
+    self.cfg.DetachInstanceDisk(self.instance.uuid, root.uuid)
 
     # re-read the instance from the configuration
     self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)

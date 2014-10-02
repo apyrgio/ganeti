@@ -556,6 +556,15 @@ class ConfigWriter(object):
     self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
     self._UnlockedRemoveDisk(disk_uuid)
 
+  # FIXME: Do we need _ConfigSync here, given that we do not modify the config?
+  @_ConfigSync()
+  def DetachInstanceDisk(self, inst_uuid, disk_uuid):
+    """Detach a disk from an instance.
+
+    This is a simple wrapper over L{_UnlockedDetachInstanceDisk}.
+    """
+    self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
+
   def _UnlockedGetDiskInfo(self, disk_uuid):
     """Returns information about a disk.
 
