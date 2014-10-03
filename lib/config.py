@@ -496,6 +496,57 @@ class ConfigWriter(object):
     self._UnlockedAddDisk(disk)
     self._UnlockedAttachInstanceDisk(inst_uuid, disk.uuid, idx)
 
+  def _UnlockedAttachInstanceDiskRe(self, inst_uuid, disk_uuid, idx=None):
+    """Attach a disk to an instance.
+
+    @type inst_uuid: string
+    @param inst_uuid: The UUID of the instance object
+    @type disk_uuid: string
+    @param disk_uuid: The UUID of the disk object
+    @type idx: int
+    @param idx: the index of the newly attached disk; if not
+      passed, the disk will be attached as the last one.
+
+    """
+    instance = self._UnlockedGetInstanceInfo(inst_uuid)
+    if instance is None:
+      raise errors.ConfigurationError("Instance %s doesn't exist"
+                                      % inst_uuid)
+    if disk_uuid not in self._ConfigData().disks:
+      raise errors.ConfigurationError("Disk %s doesn't exist" % disk_uuid)
+
+    if idx is None:
+      idx = len(instance.disks)
+    else:
+      if idx < 0:
+        raise IndexError("Not accepting negative indices other than -1")
+      elif idx > len(instance.disks):
+        raise IndexError("Got disk index %s, but there are only %s" %
+                         (idx, len(instance.disks)))
+
+    # Disk must not be attached anywhere else
+    for inst in self._ConfigData().instances.values():
+      if disk_uuid in inst.disks:
+        raise errors.ReservationError("Disk %s already attached to instance %s"
+                                      % (disk_uuid, inst.name))
+
+    instance.disks.insert(idx, disk_uuid)
+    instance.serial_no += 1
+    instance.mtime = time.time()
+
+  @_ConfigSync()
+  def AttachInstanceDisk(self, inst_uuid, disk, idx=None):
+    """Add a disk to the config and attach it to instance.
+
+    This is a simple wrapper over L{_UnlockedAddDisk} and
+    L{_UnlockedAttachInstanceDisk}.
+
+    """
+    # FIXME: Do not use _UnlockedAddDisk. We may need to increment the serial
+    # no or update the modification time however.
+    #self._UnlockedAddDisk(disk)
+    self._UnlockedAttachInstanceDiskRe(inst_uuid, disk.uuid, idx)
+
   def _UnlockedDetachInstanceDisk(self, inst_uuid, disk_uuid):
     """Detach a disk from an instance.
 
@@ -565,30 +616,47 @@ class ConfigWriter(object):
     """
     self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
 
-  def _UnlockedGetDiskInfo(self, disk_uuid):
+  def _UnlockedGetDiskInfo(self, uuid=None, name=None):
     """Returns information about a disk.
 
-    It takes the information from the configuration file.
+    Returns disk information from the configuration file, searching either with
+    the UUID or name of the disk.
 
-    @param disk_uuid: UUID of the disk
+    @param uuid: Optional UUID of the disk
+    @param name: Optional name of the disk
 
     @rtype: L{objects.Disk}
     @return: the disk object
 
     """
-    if disk_uuid not in self._ConfigData().disks:
-      return None
+    disk = None
 
-    return self._ConfigData().disks[disk_uuid]
+    if uuid and name:
+      raise Exception("Only one parameter must be given")
+    elif uuid:
+      disk = self._ConfigData().disks.get(uuid, None)
+    elif name:
+      count = 0
+      for d in self._ConfigData().disks.itervalues():
+        if d.name == name:
+          count += 1
+          disk = d
+
+      if count > 1:
+        raise Exception("There are %s disks with the name: %s", count, name)
+
+    logging.info("The disk is: %s", [disk])
+
+    return disk
 
   @_ConfigSync(shared=1)
-  def GetDiskInfo(self, disk_uuid):
+  def GetDiskInfo(self, *argc, **argv):
     """Returns information about a disk.
 
     This is a simple wrapper over L{_UnlockedGetDiskInfo}.
 
     """
-    return self._UnlockedGetDiskInfo(disk_uuid)
+    return self._UnlockedGetDiskInfo(*argc, **argv)
 
   def _UnlockedGetDiskList(self):
     """Get the list of instances.

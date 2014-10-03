@@ -742,6 +742,7 @@ class LUInstanceRecreateDisks(LogicalUnit):
     constants.IDISK_PROVIDER,
     constants.IDISK_NAME,
     constants.IDISK_ACCESS,
+    constants.IDISK_UUID,
     ]))
 
   def _RunAllocator(self):
