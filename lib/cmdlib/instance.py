@@ -2594,6 +2594,7 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
     receives absolute item index, parameters and private data object as added
     by L{_PrepareContainerMods}, returns tuple containing new item and changes
     as list
+  TODO: attach_fn
   @type modify_fn: callable
   @param modify_fn: Callback for modifying an existing item
     (L{constants.DDM_MODIFY}); receives absolute item index, item, parameters
@@ -2657,7 +2658,7 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
       elif op == constants.DDM_DETACH:
         assert not params
 
-        changes = [("%s/%s" % (kind, absidx), "remove")]
+        changes = [("%s/%s" % (kind, absidx), "detach")]
 
         if detach_fn is not None:
           msg = detach_fn(absidx, item, private)
@@ -4118,15 +4119,17 @@ class LUInstanceSetParams(LogicalUnit):
     logging.info("And the disk is: %s", [disk])
     self.cfg.AttachInstanceDisk(self.instance.uuid, disk, idx)
 
-    # The rest are the same as in CreateNewDisk, besides the Wipe part.
+    # The rest are the same as in CreateNewDisk, besides the Wipe part and the
+    # disk assemblement part.
 
     # re-read the instance from the configuration
     self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
 
     changes = [
       ("disk/%d" % idx,
-       "add:size=%s,mode=%s" % (disk.size, disk.mode)),
+       "attach:size=%s,mode=%s" % (disk.size, disk.mode)),
       ]
+
     if self.op.hotplug:
       result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
                                                (disk, self.instance),
@@ -4141,6 +4144,11 @@ class LUInstanceSetParams(LogicalUnit):
                                   constants.HOTPLUG_TARGET_DISK,
                                   disk, (link_name, uri), idx)
         changes.append(("disk/%d" % idx, msg))
+    else:
+      # Always assemble the instance disks, even if we are not hotplugging.
+      disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
+      if not disks_ok:
+        changes.append(("disk/%d" % idx, "assemble:failed"))
 
     return (disk, changes)
 
@@ -4210,7 +4218,9 @@ class LUInstanceSetParams(LogicalUnit):
       hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
                                    constants.HOTPLUG_TARGET_DISK,
                                    root, None, idx)
-      ShutdownInstanceDisks(self, self.instance, [root])
+
+    # Always shutdown the instance disk before detaching.
+    ShutdownInstanceDisks(self, self.instance, [root])
 
     ## The below commands destroy the disk, if I understand correctly.
     ## Therefore, they should not be used in the "detach" action.
