@@ -2610,10 +2610,7 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
     and the new item as parameters.
 
   """
-  logging.info("Container: %s", container)
   for (op, identifier, params, private) in mods:
-    logging.info("Op: %s, identifier: %s, params: %s, private: %s", op,
-                 identifier, params, private)
     changes = None
 
     if op == constants.DDM_ADD:
@@ -2737,7 +2734,6 @@ class LUInstanceSetParams(LogicalUnit):
       elif op in (constants.DDM_ADD, constants.DDM_MODIFY):
         item_fn(op, params)
       elif op == constants.DDM_ATTACH:
-        logging.info("The params are: %s")
         item_fn(op, params)
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
@@ -2777,7 +2773,6 @@ class LUInstanceSetParams(LogicalUnit):
                                       errors.ECODE_STATE)
 
     elif op == constants.DDM_ATTACH:
-      logging.info("Params are %s", params)
       if len(params) != 1 or (constants.IDISK_UUID not in params and
                               constants.IDISK_NAME not in params):
         raise errors.OpPrereqError("Only one argument is permitted in %s op,"
@@ -2785,6 +2780,7 @@ class LUInstanceSetParams(LogicalUnit):
                                                          constants.IDISK_NAME,
                                                          constants.IDISK_UUID),
                                    errors.ECODE_INVAL)
+      self._CheckAttachDisk(params)
 
     elif op == constants.DDM_MODIFY:
       if constants.IDISK_SIZE in params:
@@ -2908,6 +2904,15 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.pnode:
       (self.op.pnode_uuid, self.op.pnode) = \
         ExpandNodeUuidAndName(self.cfg, self.op.pnode_uuid, self.op.pnode)
+
+  # BIG FAT TODO: this
+  def _CheckAttachDisk(self, params):
+    """Check various stuff for attach operation."""
+    disk = self.cfg.GetDiskInfo(**params)
+
+  def _CheckDetachDisk(self, params):
+    """Check various stuff for detach operation."""
+    disk = self.cfg.GetDiskInfo(**params)
 
   def ExpandNames(self):
     self._ExpandAndLockInstance()
@@ -4116,7 +4121,6 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     disk = self.cfg.GetDiskInfo(**params)
-    logging.info("And the disk is: %s", [disk])
     self.cfg.AttachInstanceDisk(self.instance.uuid, disk, idx)
 
     # The rest are the same as in CreateNewDisk, besides the Wipe part and the
@@ -4145,10 +4149,17 @@ class LUInstanceSetParams(LogicalUnit):
                                   disk, (link_name, uri), idx)
         changes.append(("disk/%d" % idx, msg))
     else:
-      # Always assemble the instance disks, even if we are not hotplugging.
-      disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
-      if not disks_ok:
+      ##Always assemble the instance disks, even if we are not hotplugging.
+      #disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
+      #if not disks_ok:
+      #  changes.append(("disk/%d" % idx, "assemble:failed"))
+      result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
+                                               (disk, self.instance),
+                                               self.instance, True, idx)
+      if result.fail_msg:
         changes.append(("disk/%d" % idx, "assemble:failed"))
+        self.LogWarning("Can't assemble newly created disk %d: %s",
+                        idx, result.fail_msg)
 
     return (disk, changes)
 
