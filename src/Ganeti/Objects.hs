@@ -546,6 +546,7 @@ decodeDLId obj lid = do
 data Disk = Disk
   { diskLogicalId  :: DiskLogicalId
   , diskChildren   :: [Disk]
+  , diskNodes      :: [String]
   , diskIvName     :: String
   , diskSize       :: Int
   , diskMode       :: DiskMode
@@ -562,6 +563,7 @@ $(buildObjectSerialisation "Disk" $
   [ customField 'decodeDLId 'encodeFullDLId ["dev_type"] $
       simpleField "logical_id"    [t| DiskLogicalId   |]
   , defaultField  [| [] |] $ simpleField "children" [t| [Disk] |]
+  , defaultField  [| [] |] $ simpleField "nodes" [t| [String] |]
   , defaultField [| "" |] $ simpleField "iv_name" [t| String |]
   , simpleField "size" [t| Int |]
   , defaultField [| DiskRdWr |] $ simpleField "mode" [t| DiskMode |]
