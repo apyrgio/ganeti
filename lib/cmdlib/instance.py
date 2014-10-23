@@ -1701,7 +1701,8 @@ class LUInstanceCreate(LogicalUnit):
         CreateDisks(self, iobj, disks=disks)
       except errors.OpExecError:
         self.LogWarning("Device creation failed")
-        self.cfg.ReleaseDRBDMinors(instance_uuid)
+        for disk in disks:
+          self.cfg.ReleaseDRBDMinors(disk.uuid)
         raise
 
     feedback_fn("adding instance %s to cluster config" % self.op.instance_name)
@@ -2197,7 +2198,8 @@ class LUInstanceMove(LogicalUnit):
       CreateDisks(self, self.instance, target_node_uuid=target_node.uuid)
     except errors.OpExecError:
       self.LogWarning("Device creation failed")
-      self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+      for disk_uuid in self.instance.disks:
+        self.cfg.ReleaseDRBDMinors(disk_uuid)
       raise
 
     errs = []
@@ -2230,7 +2232,8 @@ class LUInstanceMove(LogicalUnit):
       try:
         RemoveDisks(self, self.instance, target_node_uuid=target_node.uuid)
       finally:
-        self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+        for disk_uuid in self.instance.disks:
+          self.cfg.ReleaseDRBDMinors(disk_uuid)
         raise errors.OpExecError("Errors during disk copy: %s" %
                                  (",".join(errs),))
 
@@ -3751,7 +3754,8 @@ class LUInstanceSetParams(LogicalUnit):
                   disks=new_disks)
     except errors.OpExecError:
       self.LogWarning("Device creation failed")
-      self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+      for disk in new_disks:
+        self.cfg.ReleaseDRBDMinors(disk.uuid)
       raise
 
     # Transfer the data from the old to the newly created disks of the instance.
@@ -3783,7 +3787,8 @@ class LUInstanceSetParams(LogicalUnit):
                       disks=new_disks)
           self.LogInfo("Newly created disks removed successfully")
         finally:
-          self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+          for disk in new_disks:
+            self.cfg.ReleaseDRBDMinors(disk.uuid)
           result.Raise("Error while converting the instance's template")
 
     # In case of DRBD disk, return its port to the pool
@@ -4227,7 +4232,8 @@ class LUInstanceSetParams(LogicalUnit):
         else:
           self._ConvertInstanceTemplate(feedback_fn)
       except:
-        self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+        for disk in inst_disks:
+          self.cfg.ReleaseDRBDMinors(disk.uuid)
         raise
       result.append(("disk_template", self.op.disk_template))
 
