@@ -1223,7 +1223,8 @@ class LUInstanceSetParams(LogicalUnit):
                   disks=new_disks)
     except errors.OpExecError:
       self.LogWarning("Device creation failed")
-      self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+      for disk in new_disks:
+        self.cfg.ReleaseDRBDMinors(disk.uuid)
       raise
 
     # Transfer the data from the old to the newly created disks of the instance.
@@ -1255,7 +1256,8 @@ class LUInstanceSetParams(LogicalUnit):
                       disks=new_disks)
           self.LogInfo("Newly created disks removed successfully")
         finally:
-          self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+          for disk in new_disks:
+            self.cfg.ReleaseDRBDMinors(disk.uuid)
           result.Raise("Error while converting the instance's template")
 
     # In case of DRBD disk, return its port to the pool
@@ -1700,7 +1702,8 @@ class LUInstanceSetParams(LogicalUnit):
         else:
           self._ConvertInstanceTemplate(feedback_fn)
       except:
-        self.cfg.ReleaseDRBDMinors(self.instance.uuid)
+        for disk in inst_disks:
+          self.cfg.ReleaseDRBDMinors(disk.uuid)
         raise
       result.append(("disk_template", self.op.disk_template))
 
