@@ -4134,32 +4134,22 @@ class LUInstanceSetParams(LogicalUnit):
        "attach:size=%s,mode=%s" % (disk.size, disk.mode)),
       ]
 
+    #Always assemble the instance disks, even if we are not hotplugging.
+    disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
+    if not disks_ok:
+      changes.append(("disk/%d" % idx, "assemble:failed"))
+      return disk, changes
+
     if self.op.hotplug:
+      # FIXME: This call is redundant, we only want the link_name, uri
       result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
                                                (disk, self.instance),
                                                self.instance, True, idx)
-      if result.fail_msg:
-        changes.append(("disk/%d" % idx, "assemble:failed"))
-        self.LogWarning("Can't assemble newly created disk %d: %s",
-                        idx, result.fail_msg)
-      else:
-        _, link_name, uri = result.payload
-        msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
-                                  constants.HOTPLUG_TARGET_DISK,
-                                  disk, (link_name, uri), idx)
-        changes.append(("disk/%d" % idx, msg))
-    else:
-      ##Always assemble the instance disks, even if we are not hotplugging.
-      #disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
-      #if not disks_ok:
-      #  changes.append(("disk/%d" % idx, "assemble:failed"))
-      result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
-                                               (disk, self.instance),
-                                               self.instance, True, idx)
-      if result.fail_msg:
-        changes.append(("disk/%d" % idx, "assemble:failed"))
-        self.LogWarning("Can't assemble newly created disk %d: %s",
-                        idx, result.fail_msg)
+      _, link_name, uri = result.payload
+      msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                                constants.HOTPLUG_TARGET_DISK,
+                                disk, (link_name, uri), idx)
+      changes.append(("disk/%d" % idx, msg))
 
     return (disk, changes)
 
