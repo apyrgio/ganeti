@@ -2905,10 +2905,20 @@ class LUInstanceSetParams(LogicalUnit):
       (self.op.pnode_uuid, self.op.pnode) = \
         ExpandNodeUuidAndName(self.cfg, self.op.pnode_uuid, self.op.pnode)
 
-  # BIG FAT TODO: this
   def _CheckAttachDisk(self, params):
     """Check various stuff for attach operation."""
     disk = self.cfg.GetDiskInfo(**params)
+    if disk.dev_type != self.instance.disk_template:
+      raise errors.OpPrereqError("Template mismatch. Instance has '%s' template"
+                                 " while disk has '%s' template." %
+                                 (self.instance.disk_template, disk.dev_type),
+                                 errors.ECODE_INVAL)
+    if disk.nodes != [] and self.instance.primary_node not in disk.nodes:
+      raise errors.OpPrereqError("Disk is not visible from instance."
+                                 " Disk nodes are %s while the instance's"
+                                 " primary node is %s." %
+                                 (disk.nodes, self.instance.primary_node),
+                                 errors.ECODE_INVAL)
 
   def _CheckDetachDisk(self, params):
     """Check various stuff for detach operation."""
