@@ -2633,7 +2633,6 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
 
       InsertItemToIndex(idx, item, container)
 
-      # FIXME: Do we need that function?
       if post_add_fn is not None:
         post_add_fn(addidx, item)
     else:
@@ -2731,9 +2730,8 @@ class LUInstanceSetParams(LogicalUnit):
           raise errors.OpPrereqError("No settings should be passed when"
                                      " removing or detaching a %s" % kind,
                                      errors.ECODE_INVAL)
-      elif op in (constants.DDM_ADD, constants.DDM_MODIFY):
-        item_fn(op, params)
-      elif op == constants.DDM_ATTACH:
+      elif op in (constants.DDM_ADD, constants.DDM_ATTACH,
+                  constants.DDM_MODIFY):
         item_fn(op, params)
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
@@ -2759,6 +2757,8 @@ class LUInstanceSetParams(LogicalUnit):
       if name is not None and name.lower() == constants.VALUE_NONE:
         params[constants.IDISK_NAME] = None
 
+    # This check is necessary both when adding and attaching disks
+    elif op in (constants.DDM_ADD, constants.DDM_ATTACH):
       CheckSpindlesExclusiveStorage(params, excl_stor, True)
 
       # Check disk access param (only for specific disks)
