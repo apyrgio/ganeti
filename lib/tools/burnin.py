@@ -37,6 +37,8 @@ import optparse
 import time
 import socket
 import urllib
+import random
+import uuid
 from itertools import izip, islice, cycle
 from cStringIO import StringIO
 
@@ -219,8 +221,8 @@ OPTIONS = [
   cli.cli_option("--no-activate-disks", dest="do_activate_disks",
                  help="Skip disk activation/deactivation",
                  action="store_false", default=True),
-  cli.cli_option("--no-add-disks", dest="do_addremove_disks",
-                 help="Skip disk addition/removal",
+  cli.cli_option("--no-add-disks", dest="do_modify_disks",
+                 help="Skip disk modification",
                  action="store_false", default=True),
   cli.cli_option("--no-add-nics", dest="do_addremove_nics",
                  help="Skip NIC addition/removal",
@@ -329,6 +331,8 @@ class Burner(object):
     self.hvp = self.bep = None
     self.ParseOptions()
     self.cl = cli.GetClient()
+    # FIXME: Explain this
+    self.disk_nodes = {}
     self.GetState()
 
   def ClearFeedbackBuf(self):
@@ -597,6 +601,15 @@ class Burner(object):
     self.hv_can_migrate = \
       hypervisor.GetHypervisorClass(self.hypervisor).CAN_MIGRATE
 
+  def FindMatchingDisk(self, instance, disks):
+    """Find a disk whose nodes match the instance's disk nodes."""
+    instance_nodes = self.disk_nodes[instance]
+    for disk, disk_nodes in disks.iteritems():
+      if set(instance_nodes) == set(disk_nodes):
+        del self.disks[disk]
+        return disk
+    Err("Couldn't find matching detached disk for instance %s" % instance)
+
   @_DoCheckInstances
   @_DoBatch(False)
   def BurnCreateInstances(self):
@@ -621,6 +634,15 @@ class Burner(object):
         msg = "on %s, %s" % (pnode, snode)
 
       Log(msg, indent=2)
+
+      # Calculate the disk nodes for the instance based on the disk template.
+      if self.opts.disk_template in constants.DTS_EXT_MIRROR:
+        nodes = []
+      elif self.opts.disk_template in constants.DTS_INT_MIRROR:
+        nodes = [pnode, snode]
+      else:
+        nodes = [pnode]
+      self.disk_nodes[instance] = nodes
 
       op = opcodes.OpInstanceCreate(instance_name=instance,
                                     disks=[{"size": size}
@@ -943,21 +965,49 @@ class Burner(object):
 
   @_DoCheckInstances
   @_DoBatch(False)
-  def BurnAddRemoveDisks(self):
-    """Add and remove an extra disk for the instances."""
+  def BurnModifyDisks(self):
+    """Add an extra disk and then detach, attach and remove it."""
+    disks = {}
     Log("Adding and removing disks")
+
+    # Iterate all instances, start them, add a disk with a unique name and
+    # detach it. Do all disk operations with hotplugging (if possible).
     for instance in self.instances:
       Log("instance %s", instance, indent=1)
+      disk_name = uuid.uuid4()
+      disks[disk_name] = self.disk_nodes[instance]
       op_add = opcodes.OpInstanceSetParams(
-        instance_name=instance,
-        disks=[(constants.DDM_ADD, {"size": self.disk_size[0]})])
+        instance_name=instance, hotplug_if_possible=True,
+        disks=[(constants.DDM_ADD, {"size": self.disk_size[0],
+                                    "name": disk_name})])
+      op_detach = opcodes.OpInstanceSetParams(
+        instance_name=instance, hotplug_if_possible=True,
+        disks=[(constants.DDM_DETACH, {})])
+      op_start = self.StartInstanceOp(instance)
+      Log("adding a disk with name %s" % disk_name, indent=2)
+      Log("detaching last disk", indent=2)
+      self.ExecOrQueue(instance, [op_start, op_add, op_detach])
+
+    # Iterate all instances in random order, attach the detached disks, remove
+    # them and then restart the instances. Do all disk operation with
+    # hotplugging (if possible).
+    for instance in random.shuffle(self.instances.copy()):
+      Log("instance %s", instance, indent=1)
+      disk_name = self.FindMatchingDisk(instance, disks)
+      op_attach = opcodes.OpInstanceSetParams(
+        instance_name=instance, hotplug_if_possible=True,
+        disks=[(constants.DDM_ATTACH, {"name": disk_name})])
       op_rem = opcodes.OpInstanceSetParams(
-        instance_name=instance, disks=[(constants.DDM_REMOVE, {})])
+        instance_name=instance, hotplug_if_possible=True,
+        disks=[(constants.DDM_REMOVE, {})])
       op_stop = self.StopInstanceOp(instance)
       op_start = self.StartInstanceOp(instance)
-      Log("adding a disk", indent=2)
+      Log("attaching a disk with name %s" % disk_name, indent=2)
       Log("removing last disk", indent=2)
-      self.ExecOrQueue(instance, [op_add, op_stop, op_rem, op_start])
+      self.ExecOrQueue(instance, [op_attach, op_rem, op_stop, op_start])
+
+    # Disk nodes are useful only for this test and might change onwards.
+    delattr(self, "disk_nodes")
 
   @_DoBatch(False)
   def BurnAddRemoveNICs(self):
@@ -1083,6 +1133,11 @@ class Burner(object):
     try:
       self.BurnCreateInstances()
 
+      # This test must run always after BurnCreateInstances, since the disk
+      # nodes for an instance might change from the other operations.
+      if self.opts.do_modify_disks:
+        self.BurnModifyDisks()
+
       if self.bep[constants.BE_MINMEM] < self.bep[constants.BE_MAXMEM]:
         self.BurnModifyRuntimeMemory()
 
@@ -1127,9 +1182,6 @@ class Burner(object):
 
       if self.opts.do_renamesame:
         self.BurnRenameSame(self.opts.name_check, self.opts.ip_check)
-
-      if self.opts.do_addremove_disks:
-        self.BurnAddRemoveDisks()
 
       default_nic_mode = self.cluster_default_nicparams[constants.NIC_MODE]
       # Don't add/remove nics in routed mode, as we would need an ip to add
