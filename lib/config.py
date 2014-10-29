@@ -604,6 +604,10 @@ class ConfigWriter(object):
       if count > 1:
         raise Exception("There are %s disks with the name: %s", count, name)
 
+    if disk is None:
+      raise Exception("No disk was found with the following %s: %s",
+                      "UUID" if uuid else "name", uuid or name)
+
     return disk
 
   @_ConfigSync(shared=1)
