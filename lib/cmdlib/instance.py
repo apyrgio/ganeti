@@ -2539,9 +2539,46 @@ def GetItemFromContainer(identifier, kind, container):
                              (kind, identifier), errors.ECODE_NOENT)
 
 
+def GetIndexFromIdentifier(identifier, kind, container):
+  """Check if the identifier represents a valid container index and return it.
+
+  Used in "add" and "attach" actions.
+  """
+  try:
+    idx = int(identifier)
+  except ValueError:
+    raise errors.OpPrereqError("Only possitive integer or -1 is accepted as"
+                                " identifier for add/attach")
+  if idx == -1:
+    addidx = len(container)
+  else:
+    if idx < 0:
+      raise IndexError("Not accepting negative indices other than -1")
+    elif idx > len(container):
+      raise IndexError("Got %s index %s, but there are only %s" %
+                        (kind, idx, len(container)))
+    addidx = idx
+
+  return addidx, idx
+
+
+def InsertItemToIndex(idx, item, container):
+  """Insert an item to the provided index of a container.
+
+  Used in "add" and "attach" actions.
+  """
+  if idx == -1:
+    container.append(item)
+  else:
+    assert idx >= 0
+    assert idx <= len(container)
+    # list.insert does so before the specified index
+    container.insert(idx, item)
+
+
 def _ApplyContainerMods(kind, container, chgdesc, mods,
-                        create_fn, modify_fn, remove_fn,
-                        post_add_fn=None):
+                        create_fn, attach_fn, modify_fn, remove_fn,
+                        detach_fn, post_add_fn=None):
   """Applies descriptions in C{mods} to C{container}.
 
   @type kind: string
@@ -2557,6 +2594,10 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
     receives absolute item index, parameters and private data object as added
     by L{_PrepareContainerMods}, returns tuple containing new item and changes
     as list
+  @type attach_fn: callable
+  @param attach_fn: Callback for attaching an existing item to a container
+    (L{constants.DDM_ATTACH}); receives absolute item index and item UUID or
+    name, returns tuple containing new item and changes as list
   @type modify_fn: callable
   @param modify_fn: Callback for modifying an existing item
     (L{constants.DDM_MODIFY}); receives absolute item index, item, parameters
@@ -2564,6 +2605,9 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
     changes as list
   @type remove_fn: callable
   @param remove_fn: Callback on removing item; receives absolute item index,
+    item and private data object as added by L{_PrepareContainerMods}
+  @type detach_fn: callable
+  @param detach_fn: Callback on detaching item; receives absolute item index,
     item and private data object as added by L{_PrepareContainerMods}
   @type post_add_fn: callable
   @param post_add_fn: Callable for post-processing a newly created item after
@@ -2575,40 +2619,27 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
     changes = None
 
     if op == constants.DDM_ADD:
-      # Calculate where item will be added
-      # When adding an item, identifier can only be an index
-      try:
-        idx = int(identifier)
-      except ValueError:
-        raise errors.OpPrereqError("Only possitive integer or -1 is accepted as"
-                                   " identifier for %s" % constants.DDM_ADD,
-                                   errors.ECODE_INVAL)
-      if idx == -1:
-        addidx = len(container)
-      else:
-        if idx < 0:
-          raise IndexError("Not accepting negative indices other than -1")
-        elif idx > len(container):
-          raise IndexError("Got %s index %s, but there are only %s" %
-                           (kind, idx, len(container)))
-        addidx = idx
-
+      addidx, idx = GetIndexFromIdentifier(identifier, kind, container)
       if create_fn is None:
         item = params
       else:
         (item, changes) = create_fn(addidx, params, private)
 
-      if idx == -1:
-        container.append(item)
-      else:
-        assert idx >= 0
-        assert idx <= len(container)
-        # list.insert does so before the specified index
-        container.insert(idx, item)
+      InsertItemToIndex(idx, item, container)
 
       if post_add_fn is not None:
         post_add_fn(addidx, item)
+    elif op == constants.DDM_ATTACH:
+      addidx, idx = GetIndexFromIdentifier(identifier, kind, container)
+      if attach_fn is None:
+        item = params
+      else:
+        (item, changes) = attach_fn(addidx, params, private)
 
+      InsertItemToIndex(idx, item, container)
+
+      if post_add_fn is not None:
+        post_add_fn(addidx, item)
     else:
       # Retrieve existing item
       (absidx, item) = GetItemFromContainer(identifier, kind, container)
@@ -2623,6 +2654,19 @@ def _ApplyContainerMods(kind, container, chgdesc, mods,
           if msg:
             changes.append(("%s/%s" % (kind, absidx), msg))
 
+        assert container[absidx] == item
+        del container[absidx]
+      elif op == constants.DDM_DETACH:
+        assert not params
+
+        changes = [("%s/%s" % (kind, absidx), "detach")]
+
+        if detach_fn is not None:
+          msg = detach_fn(absidx, item, private)
+          if msg:
+            changes.append(("%s/%s" % (kind, absidx), msg))
+
+        # FIXME: Should we add the two lines below?
         assert container[absidx] == item
         del container[absidx]
       elif op == constants.DDM_MODIFY:
@@ -2655,14 +2699,21 @@ class LUInstanceSetParams(LogicalUnit):
 
       addremove = 0
       for op, params in mods:
-        if op in (constants.DDM_ADD, constants.DDM_REMOVE):
+        if op in (constants.DDM_ADD, constants.DDM_ATTACH,
+                  constants.DDM_REMOVE, constants.DDM_DETACH):
+          if (op in (constants.DDM_ATTACH, constants.DDM_DETACH) and
+              kind == "NIC"):
+            raise errors.OpPrereqError("Attach/detach operation is not"
+                                       " supported for NICs." %
+                                       (kind, errors.ECODE_INVAL))
+
           result.append((op, -1, params))
           addremove += 1
 
           if addremove > 1:
-            raise errors.OpPrereqError("Only one %s add or remove operation is"
-                                       " supported at a time" % kind,
-                                       errors.ECODE_INVAL)
+            raise errors.OpPrereqError("Only one %s add/attach/remove/detach "
+                                       "operation is supported at a time" %
+                                       kind, errors.ECODE_INVAL)
         else:
           result.append((constants.DDM_MODIFY, op, params))
 
@@ -2685,12 +2736,13 @@ class LUInstanceSetParams(LogicalUnit):
       if key_types:
         utils.ForceDictType(params, key_types)
 
-      if op == constants.DDM_REMOVE:
+      if op in (constants.DDM_REMOVE, constants.DDM_DETACH):
         if params:
           raise errors.OpPrereqError("No settings should be passed when"
-                                     " removing a %s" % kind,
+                                     " removing or detaching a %s" % kind,
                                      errors.ECODE_INVAL)
-      elif op in (constants.DDM_ADD, constants.DDM_MODIFY):
+      elif op in (constants.DDM_ADD, constants.DDM_ATTACH,
+                  constants.DDM_MODIFY):
         item_fn(op, params)
       else:
         raise errors.ProgrammerError("Unhandled operation '%s'" % op)
@@ -2716,6 +2768,8 @@ class LUInstanceSetParams(LogicalUnit):
       if name is not None and name.lower() == constants.VALUE_NONE:
         params[constants.IDISK_NAME] = None
 
+    # This check is necessary both when adding and attaching disks
+    elif op in (constants.DDM_ADD, constants.DDM_ATTACH):
       CheckSpindlesExclusiveStorage(params, excl_stor, True)
 
       # Check disk access param (only for specific disks)
@@ -2728,6 +2782,16 @@ class LUInstanceSetParams(LogicalUnit):
                                      " used with %s disk access param" %
                                      (self.instance.hypervisor, access_type),
                                       errors.ECODE_STATE)
+
+    elif op == constants.DDM_ATTACH:
+      if len(params) != 1 or (constants.IDISK_UUID not in params and
+                              constants.IDISK_NAME not in params):
+        raise errors.OpPrereqError("Only one argument is permitted in %s op,"
+                                   " either %s or %s" % (constants.DDM_ATTACH,
+                                                         constants.IDISK_NAME,
+                                                         constants.IDISK_UUID),
+                                   errors.ECODE_INVAL)
+      self._CheckAttachDisk(params)
 
     elif op == constants.DDM_MODIFY:
       if constants.IDISK_SIZE in params:
@@ -2851,6 +2915,27 @@ class LUInstanceSetParams(LogicalUnit):
     if self.op.pnode:
       (self.op.pnode_uuid, self.op.pnode) = \
         ExpandNodeUuidAndName(self.cfg, self.op.pnode_uuid, self.op.pnode)
+
+  def _CheckAttachDisk(self, params):
+    """Check if disk can be attached to an instance.
+
+    Check if the disk and instance have the same template. Also, check if the
+    disk nodes are visible from the instance.
+    """
+    disk = self.cfg.GetDiskInfo(**params)
+    if disk.dev_type != self.instance.disk_template:
+      raise errors.OpPrereqError("Template mismatch. Instance has '%s' template"
+                                 " while disk has '%s' template." %
+                                 (self.instance.disk_template, disk.dev_type),
+                                 errors.ECODE_INVAL)
+
+    instance_nodes = self.cfg.GetInstanceNodes(self.instance.uuid)
+    if not set(disk.nodes).issubset(set(instance_nodes)):
+      raise errors.OpPrereqError("Disk is not visible from instance."
+                                 " Disk nodes are %s while the instance's"
+                                 " nodes are %s." %
+                                 (disk.nodes, instance_nodes),
+                                 errors.ECODE_INVAL)
 
   def ExpandNames(self):
     self._ExpandAndLockInstance()
@@ -3227,12 +3312,12 @@ class LUInstanceSetParams(LogicalUnit):
     if self.instance.disk_template in constants.DT_EXT:
       for mod in self.diskmod:
         ext_provider = mod[2].get(constants.IDISK_PROVIDER, None)
-        if mod[0] == constants.DDM_ADD:
+        if mod[0] in (constants.DDM_ADD, constants.DDM_ATTACH):
           if ext_provider is None:
             raise errors.OpPrereqError("Instance template is '%s' and parameter"
-                                       " '%s' missing, during disk add" %
+                                       " '%s' missing, during disk %s" %
                                        (constants.DT_EXT,
-                                        constants.IDISK_PROVIDER),
+                                        constants.IDISK_PROVIDER, mod[0]),
                                        errors.ECODE_NOENT)
         elif mod[0] == constants.DDM_MODIFY:
           if ext_provider:
@@ -3252,10 +3337,10 @@ class LUInstanceSetParams(LogicalUnit):
 
     if not self.op.wait_for_sync and not self.instance.disks_active:
       for mod in self.diskmod:
-        if mod[0] == constants.DDM_ADD:
-          raise errors.OpPrereqError("Can't add a disk to an instance with"
+        if mod[0] in (constants.DDM_ADD, constants.DDM_ATTACH):
+          raise errors.OpPrereqError("Can't %s a disk to an instance with"
                                      " deactivated disks and"
-                                     " --no-wait-for-sync given.",
+                                     " --no-wait-for-sync given." % mod[0],
                                      errors.ECODE_INVAL)
 
     if self.op.disks and self.instance.disk_template == constants.DT_DISKLESS:
@@ -3268,8 +3353,8 @@ class LUInstanceSetParams(LogicalUnit):
     # Verify disk changes (operating on a copy)
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     disks = copy.deepcopy(inst_disks)
-    _ApplyContainerMods("disk", disks, None, self.diskmod, None,
-                        _PrepareDiskMod, None)
+    _ApplyContainerMods("disk", disks, None, self.diskmod, None, None,
+                        _PrepareDiskMod, None, None)
     utils.ValidateDeviceNames("disk", disks)
     if len(disks) > constants.MAX_DISKS:
       raise errors.OpPrereqError("Instance has too many disks (%d), cannot add"
@@ -3641,8 +3726,8 @@ class LUInstanceSetParams(LogicalUnit):
 
     # Verify NIC changes (operating on copy)
     nics = [nic.Copy() for nic in self.instance.nics]
-    _ApplyContainerMods("NIC", nics, None, self.nicmod,
-                        _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove)
+    _ApplyContainerMods("NIC", nics, None, self.nicmod, _PrepareNicCreate,
+                        None, _PrepareNicMod, _PrepareNicRemove, None)
     if len(nics) > constants.MAX_NICS:
       raise errors.OpPrereqError("Instance has too many network interfaces"
                                  " (%d), cannot add more" % constants.MAX_NICS,
@@ -3654,8 +3739,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in self.instance.nics]
       _ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                          self._CreateNewNic, self._ApplyNicMods,
-                          self._RemoveNic)
+                          self._CreateNewNic, None, self._ApplyNicMods,
+                          self._RemoveNic, None)
       # Verify that NIC names are unique and valid
       utils.ValidateDeviceNames("NIC", nics)
       self._new_nics = nics
@@ -4052,6 +4137,43 @@ class LUInstanceSetParams(LogicalUnit):
     if not self.instance.disks_active:
       ShutdownInstanceDisks(self, self.instance, disks=[disk])
 
+  def _AttachDisk(self, idx, params, _):
+    """Attaches an existing disk to an instance.
+
+    """
+    disk = self.cfg.GetDiskInfo(**params)
+    self.cfg.AttachInstanceDisk(self.instance.uuid, disk, idx)
+
+    # The rest are the same as in CreateNewDisk, besides the Wipe part and the
+    # disk assemblement part.
+
+    # re-read the instance from the configuration
+    self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
+
+    changes = [
+      ("disk/%d" % idx,
+       "attach:size=%s,mode=%s" % (disk.size, disk.mode)),
+      ]
+
+    #Always assemble the instance disks, even if we are not hotplugging.
+    disks_ok, _ = AssembleInstanceDisks(self, self.instance, disks=[disk])
+    if not disks_ok:
+      changes.append(("disk/%d" % idx, "assemble:failed"))
+      return disk, changes
+
+    if self.op.hotplug:
+      # FIXME: This call is redundant, we only want the link_name, uri
+      result = self.rpc.call_blockdev_assemble(self.instance.primary_node,
+                                               (disk, self.instance),
+                                               self.instance, True, idx)
+      _, link_name, uri = result.payload
+      msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                                constants.HOTPLUG_TARGET_DISK,
+                                disk, (link_name, uri), idx)
+      changes.append(("disk/%d" % idx, msg))
+
+    return (disk, changes)
+
   def _ModifyDisk(self, idx, disk, params, _):
     """Modifies a disk.
 
@@ -4103,6 +4225,27 @@ class LUInstanceSetParams(LogicalUnit):
 
     # Remove disk from config
     self.cfg.RemoveInstanceDisk(self.instance.uuid, root.uuid)
+
+    # re-read the instance from the configuration
+    self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
+
+    return hotmsg
+
+  def _DetachDisk(self, idx, root, _):
+    """Detaches a disk from an instance.
+
+    """
+    hotmsg = ""
+    if self.op.hotplug:
+      hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                                   constants.HOTPLUG_TARGET_DISK,
+                                   root, None, idx)
+
+    # Always shutdown the disk before detaching.
+    ShutdownInstanceDisks(self, self.instance, [root])
+
+    # Remove disk from config
+    self.cfg.DetachInstanceDisk(self.instance.uuid, root.uuid)
 
     # re-read the instance from the configuration
     self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
@@ -4210,8 +4353,9 @@ class LUInstanceSetParams(LogicalUnit):
     # Apply disk changes
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     _ApplyContainerMods("disk", inst_disks, result, self.diskmod,
-                        self._CreateNewDisk, self._ModifyDisk,
-                        self._RemoveDisk, post_add_fn=self._PostAddDisk)
+                        self._CreateNewDisk, self._AttachDisk,
+                        self._ModifyDisk, self._RemoveDisk, self._DetachDisk,
+                        post_add_fn=self._PostAddDisk)
 
     if self.op.disk_template:
       if __debug__:
