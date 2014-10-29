@@ -496,6 +496,15 @@ class ConfigWriter(object):
     self._UnlockedAddDisk(disk)
     self._UnlockedAttachInstanceDisk(inst_uuid, disk.uuid, idx)
 
+  @_ConfigSync()
+  def AttachInstanceDisk(self, inst_uuid, disk, idx=None):
+    """Attach an existing disk to an instance.
+
+    This is a simple wrapper over L{_UnlockedAttachInstanceDisk}.
+
+    """
+    self._UnlockedAttachInstanceDisk(inst_uuid, disk.uuid, idx)
+
   def _UnlockedDetachInstanceDisk(self, inst_uuid, disk_uuid):
     """Detach a disk from an instance.
 
@@ -556,30 +565,59 @@ class ConfigWriter(object):
     self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
     self._UnlockedRemoveDisk(disk_uuid)
 
-  def _UnlockedGetDiskInfo(self, disk_uuid):
+  @_ConfigSync()
+  def DetachInstanceDisk(self, inst_uuid, disk_uuid):
+    """Detach a disk from an instance.
+
+    This is a simple wrapper over L{_UnlockedDetachInstanceDisk}.
+    """
+    self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
+
+  def _UnlockedGetDiskInfo(self, uuid=None, name=None):
     """Returns information about a disk.
 
-    It takes the information from the configuration file.
+    Returns disk information from the configuration file, searching either with
+    the UUID or name of the disk.
 
-    @param disk_uuid: UUID of the disk
+    @param uuid: Optional UUID of the disk
+    @param name: Optional name of the disk
 
     @rtype: L{objects.Disk}
     @return: the disk object
 
     """
-    if disk_uuid not in self._ConfigData().disks:
-      return None
+    disk = None
 
-    return self._ConfigData().disks[disk_uuid]
+    if uuid and name:
+      raise errors.ProgrammerError("Only one parameter must be given")
+    elif uuid:
+      disk = self._ConfigData().disks.get(uuid, None)
+    elif name:
+      count = 0
+      for d in self._ConfigData().disks.itervalues():
+        if d.name == name:
+          count += 1
+          disk = d
+
+      if count > 1:
+        raise errors.ConfigurationError("There are %s disks with the name: %s"
+                                        % (count, name))
+
+    if disk is None:
+      raise errors.ConfigurationError("No disk was found with this %s: %s" %
+                                      ("UUID" if uuid else "name",
+                                       uuid or name))
+
+    return disk
 
   @_ConfigSync(shared=1)
-  def GetDiskInfo(self, disk_uuid):
+  def GetDiskInfo(self, uuid=None, name=None):
     """Returns information about a disk.
 
     This is a simple wrapper over L{_UnlockedGetDiskInfo}.
 
     """
-    return self._UnlockedGetDiskInfo(disk_uuid)
+    return self._UnlockedGetDiskInfo(uuid, name)
 
   def _UnlockedGetDiskList(self):
     """Get the list of instances.
@@ -635,8 +673,9 @@ class ConfigWriter(object):
   def _UnlockedGetInstanceNodes(self, inst_uuid):
     """Get all disk-related nodes for an instance.
 
-    For non-DRBD, this will be empty, for DRBD it will contain both
-    the primary and the secondaries.
+    For non-DRBD instances, this will contain only the instance's primary node,
+    whereas for DRBD instances, it will contain both the primary and the
+    secondaries.
 
     @type inst_uuid: string
     @param inst_uuid: The UUID of the instance we want to get nodes for
