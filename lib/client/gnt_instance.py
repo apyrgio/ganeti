@@ -1256,14 +1256,24 @@ def _ConvertNicDiskModifications(mods):
       # Add item as last item (legacy interface)
       action = constants.DDM_ADD
       identifier = -1
+    elif identifier == constants.DDM_ATTACH:
+      # Attach item as last item (legacy interface)
+      action = constants.DDM_ATTACH
+      identifier = -1
     elif identifier == constants.DDM_REMOVE:
       # Remove last item (legacy interface)
       action = constants.DDM_REMOVE
       identifier = -1
+    elif identifier == constants.DDM_DETACH:
+      # Detach last item (legacy interface)
+      action = constants.DDM_DETACH
+      identifier = -1
     else:
       # Modifications and adding/removing at arbitrary indices
       add = params.pop(constants.DDM_ADD, _MISSING)
+      attach = params.pop(constants.DDM_ATTACH, _MISSING)
       remove = params.pop(constants.DDM_REMOVE, _MISSING)
+      detach = params.pop(constants.DDM_DETACH, _MISSING)
       modify = params.pop(constants.DDM_MODIFY, _MISSING)
 
       if modify is _MISSING:
@@ -1272,8 +1282,12 @@ def _ConvertNicDiskModifications(mods):
                                      errors.ECODE_INVAL)
         elif add is not _MISSING:
           action = constants.DDM_ADD
+        elif attach is not _MISSING:
+          action = constants.DDM_ATTACH
         elif remove is not _MISSING:
           action = constants.DDM_REMOVE
+        elif detach is not _MISSING:
+          action = constants.DDM_DETACH
         else:
           action = constants.DDM_MODIFY
 
@@ -1285,8 +1299,8 @@ def _ConvertNicDiskModifications(mods):
 
       assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
 
-    if action == constants.DDM_REMOVE and params:
-      raise errors.OpPrereqError("Not accepting parameters on removal",
+    if action in (constants.DDM_REMOVE, constants.DDM_DETACH) and params:
+      raise errors.OpPrereqError("Not accepting parameters on removal/detach",
                                  errors.ECODE_INVAL)
 
     result.append((action, identifier, params))
