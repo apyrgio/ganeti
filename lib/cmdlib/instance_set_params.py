@@ -58,7 +58,7 @@ from ganeti.cmdlib.instance_storage import CalculateFileStorageDir, \
   ComputeDiskSizePerVG, ComputeDisksInfo, CreateDisks, \
   CreateSingleBlockDev, GenerateDiskTemplate, \
   IsExclusiveStorageEnabledNodeUuid, ShutdownInstanceDisks, \
-  WaitForSync, WipeOrCleanupDisks
+  WaitForSync, WipeOrCleanupDisks, AssembleInstanceDisks
 from ganeti.cmdlib.instance_utils import BuildInstanceHookEnvByObject, \
   NICToTuple, CheckNodeNotDrained, CopyLockList, \
   ReleaseLocks, CheckNodeVmCapable, CheckTargetNodeIPolicy, \
@@ -783,8 +783,8 @@ class LUInstanceSetParams(LogicalUnit):
     # Verify disk changes (operating on a copy)
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     disks = copy.deepcopy(inst_disks)
-    ApplyContainerMods("disk", disks, None, self.diskmod, None,
-                       _PrepareDiskMod, None)
+    ApplyContainerMods("disk", disks, None, self.diskmod, None, None,
+                       _PrepareDiskMod, None, None)
     utils.ValidateDeviceNames("disk", disks)
     if len(disks) > constants.MAX_DISKS:
       raise errors.OpPrereqError("Instance has too many disks (%d), cannot add"
@@ -1160,6 +1160,10 @@ class LUInstanceSetParams(LogicalUnit):
                                    {}, cluster, pnode_uuid)
       return (None, None)
 
+    def _PrepareNicAttach(_, __, ___):
+      raise errors.OpPrereqError("Attach operation is not supported for NICs",
+                                 errors.ECODE_INVAL)
+
     def _PrepareNicMod(_, nic, params, private):
       self._PrepareNicModification(params, private, nic.ip, nic.network,
                                    nic.nicparams, cluster, pnode_uuid)
@@ -1171,10 +1175,15 @@ class LUInstanceSetParams(LogicalUnit):
       if net is not None and ip is not None:
         self.cfg.ReleaseIp(net, ip, self.proc.GetECId())
 
+    def _PrepareNicDetach(_, __, ___):
+      raise errors.OpPrereqError("Detach operation is not supported for NICs",
+                                 errors.ECODE_INVAL)
+
     # Verify NIC changes (operating on copy)
     nics = [nic.Copy() for nic in self.instance.nics]
-    ApplyContainerMods("NIC", nics, None, self.nicmod,
-                       _PrepareNicCreate, _PrepareNicMod, _PrepareNicRemove)
+    ApplyContainerMods("NIC", nics, None, self.nicmod, _PrepareNicCreate,
+                       _PrepareNicAttach, _PrepareNicMod, _PrepareNicRemove,
+                       _PrepareNicDetach)
     if len(nics) > constants.MAX_NICS:
       raise errors.OpPrereqError("Instance has too many network interfaces"
                                  " (%d), cannot add more" % constants.MAX_NICS,
@@ -1186,8 +1195,8 @@ class LUInstanceSetParams(LogicalUnit):
       # Operate on copies as this is still in prereq
       nics = [nic.Copy() for nic in self.instance.nics]
       ApplyContainerMods("NIC", nics, self._nic_chgdesc, self.nicmod,
-                         self._CreateNewNic, self._ApplyNicMods,
-                         self._RemoveNic)
+                         self._CreateNewNic, None, self._ApplyNicMods,
+                         self._RemoveNic, None)
       # Verify that NIC names are unique and valid
       utils.ValidateDeviceNames("NIC", nics)
       self._new_nics = nics
@@ -1588,6 +1597,36 @@ class LUInstanceSetParams(LogicalUnit):
     if not self.instance.disks_active:
       ShutdownInstanceDisks(self, self.instance, disks=[disk])
 
+  def _AttachDisk(self, idx, params, _):
+    """Attaches an existing disk to an instance.
+
+    """
+    disk = self.GenericGetDiskInfo(**params) # pylint: disable=W0142
+    self.cfg.AttachInstanceDisk(self.instance.uuid, disk, idx)
+
+    # re-read the instance from the configuration
+    self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
+
+    changes = [
+      ("disk/%d" % idx,
+       "attach:size=%s,mode=%s" % (disk.size, disk.mode)),
+      ]
+
+    if self.op.hotplug:
+      disks_ok, _, results = AssembleInstanceDisks(self, self.instance,
+                                                   disks=[disk])
+      if not disks_ok:
+        changes.append(("disk/%d" % idx, "assemble:failed"))
+        return disk, changes
+
+      _, link_name, uri = results[0].payload
+      msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
+                                constants.HOTPLUG_TARGET_DISK,
+                                disk, (link_name, uri), idx)
+      changes.append(("disk/%d" % idx, msg))
+
+    return (disk, changes)
+
   def _ModifyDisk(self, idx, disk, params, _):
     """Modifies a disk.
 
@@ -1639,6 +1678,27 @@ class LUInstanceSetParams(LogicalUnit):
 
     # Remove disk from config
     self.cfg.RemoveInstanceDisk(self.instance.uuid, root.uuid)
+
+    # re-read the instance from the configuration
+    self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
+
+    return hotmsg
+
+  def _DetachDisk(self, idx, root, _):
+    """Detaches a disk from an instance.
+
+    """
+    hotmsg = ""
+    if self.op.hotplug:
+      hotmsg = self._HotplugDevice(constants.HOTPLUG_ACTION_REMOVE,
+                                   constants.HOTPLUG_TARGET_DISK,
+                                   root, None, idx)
+
+    # Always shutdown the disk before detaching.
+    ShutdownInstanceDisks(self, self.instance, [root])
+
+    # Remove disk from config
+    self.cfg.DetachInstanceDisk(self.instance.uuid, root.uuid)
 
     # re-read the instance from the configuration
     self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
@@ -1746,8 +1806,9 @@ class LUInstanceSetParams(LogicalUnit):
     # Apply disk changes
     inst_disks = self.cfg.GetInstanceDisks(self.instance.uuid)
     ApplyContainerMods("disk", inst_disks, result, self.diskmod,
-                       self._CreateNewDisk, self._ModifyDisk,
-                       self._RemoveDisk, post_add_fn=self._PostAddDisk)
+                       self._CreateNewDisk, self._AttachDisk, self._ModifyDisk,
+                       self._RemoveDisk, self._DetachDisk,
+                       post_add_fn=self._PostAddDisk)
 
     if self.op.disk_template:
       if __debug__:
