@@ -733,8 +733,8 @@ class Burner(FeedbackAccumulator):
       self.ExecOrQueue(instance, [op_attach, op_rem, op_stop, op_start])
 
     # Disk nodes are useful only for this test.
-    delattr(self, "disk_nodes")
-    delattr(self, "_disks")
+    del self.disk_nodes
+    del self._disks
 
   @_DoBatch(False)
   def BurnModifyRuntimeMemory(self):
