@@ -1609,13 +1609,13 @@ class LUInstanceSetParams(LogicalUnit):
       ]
 
     if self.op.hotplug:
-      disks_ok, _, results = AssembleInstanceDisks(self, self.instance,
-                                                   disks=[disk])
+      disks_ok, _, payloads = AssembleInstanceDisks(self, self.instance,
+                                                    disks=[disk])
       if not disks_ok:
         changes.append(("disk/%d" % idx, "assemble:failed"))
         return disk, changes
 
-      _, link_name, uri = results[0].payload
+      _, link_name, uri = payloads[0]
       msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
                                 constants.HOTPLUG_TARGET_DISK,
                                 disk, (link_name, uri), idx)
