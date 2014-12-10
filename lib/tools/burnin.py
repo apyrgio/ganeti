@@ -318,25 +318,11 @@ def _DoBatch(retry):
   return wrap
 
 
-class Burner(object):
-  """Burner class."""
+class FeedbackAccumulator(object):
+  """Feedback accumulator class."""
 
-  def __init__(self):
-    """Constructor."""
-    self.url_opener = SimpleOpener()
-    self._feed_buf = StringIO()
-    self.nodes = []
-    self.instances = []
-    self.to_rem = []
-    self.queued_ops = []
-    self.opts = None
-    self.queue_retry = False
-    self.disk_count = self.disk_growth = self.disk_size = None
-    self.hvp = self.bep = None
-    self.ParseOptions()
-    self.cl = cli.GetClient()
-    self.disk_nodes = {}
-    self.GetState()
+  self._feed_buf = StringIO()
+  self.opts = None
 
   def ClearFeedbackBuf(self):
     """Clear the feedback buffer."""
@@ -352,6 +338,26 @@ class Burner(object):
     self._feed_buf.write(formatted_msg + "\n")
     if self.opts.verbose:
       Log(formatted_msg, indent=3)
+
+
+class Burner(FeedbackAccumulator):
+  """Burner class."""
+
+  def __init__(self):
+    """Constructor."""
+    self.url_opener = SimpleOpener()
+    self.nodes = []
+    self.instances = []
+    self.to_rem = []
+    self.queued_ops = []
+    self.opts = None
+    self.queue_retry = False
+    self.disk_count = self.disk_growth = self.disk_size = None
+    self.hvp = self.bep = None
+    self.ParseOptions()
+    self.cl = cli.GetClient()
+    self.disk_nodes = {}
+    self.GetState()
 
   def MaybeRetry(self, retry_count, msg, fn, *args):
     """Possibly retry a given function execution.
