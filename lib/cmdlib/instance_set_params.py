@@ -89,7 +89,7 @@ class LUInstanceSetParams(LogicalUnit):
   HTYPE = constants.HTYPE_INSTANCE
   REQ_BGL = False
 
-  def GenericGetDiskInfo(self, **params):
+  def GenericGetDiskInfo(self, uuid=None, name=None):
     """Find a disk object using the provided params.
 
     Accept arguments as keywords and use the GetDiskInfo/GetDiskInfoByName
@@ -98,12 +98,12 @@ class LUInstanceSetParams(LogicalUnit):
     In case of an error, raise the appropriate exceptions.
     """
     name = constants.IDISK_NAME
-    if "uuid" in params:
+    if uuid:
       disk = self.cfg.GetDiskInfo(params["uuid"])
       if disk is None:
         raise errors.OpPrereqError("No disk was found with this UUID: %s" %
                                    params["uuid"], errors.ECODE_INVAL)
-    elif name in params:
+    elif name:
       disk = self.cfg.GetDiskInfoByName(params[name])
       if disk is None:
         raise errors.OpPrereqError("No disk was found with this %s: %s" %
@@ -352,7 +352,9 @@ class LUInstanceSetParams(LogicalUnit):
     Check if the disk and instance have the same template. Also, check if the
     disk nodes are visible from the instance.
     """
-    disk = self.GenericGetDiskInfo(**params) # pylint: disable=W0142
+    uuid = params.get("uuid", None)
+    name = params.get("name", None)
+    disk = self.GenericGetDiskInfo(uuid, name)
     if disk.dev_type != self.instance.disk_template:
       raise errors.OpPrereqError("Instance has '%s' template while disk has"
                                  " '%s' template" %
