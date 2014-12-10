@@ -1279,33 +1279,26 @@ def _ConvertNicDiskModifications(mods):
       detach = params.pop(constants.DDM_DETACH, _MISSING)
       modify = params.pop(constants.DDM_MODIFY, _MISSING)
 
-      if modify is _MISSING:
-        # Check if the user has requested more than one operation and raise an
-        # exception. If no operations have been given, default to modify.
-        action = constants.DDM_MODIFY
-        ops = {
-          constants.DDM_ADD: add,
-          constants.DDM_ATTACH: attach,
-          constants.DDM_REMOVE: remove,
-          constants.DDM_DETACH: detach
-        }
-        count = 0
-        for op, param in ops.items():
-          if param is not _MISSING:
-            count += 1
-            action = op
-        if count > 1:
-          raise errors.OpPrereqError(
-            "Cannot do more than one of the following operations at the"
-            " same time: %s" % ", ".join(ops.keys()),
-            errors.ECODE_INVAL)
-
-      elif (add is _MISSING and attach is _MISSING and remove is _MISSING and
-            detach is _MISSING):
-        action = constants.DDM_MODIFY
-      else:
-        raise errors.OpPrereqError("Cannot modify and add/attach/remove/detach"
-                                   " at the same time", errors.ECODE_INVAL)
+      # Check if the user has requested more than one operation and raise an
+      # exception. If no operations have been given, default to modify.
+      action = constants.DDM_MODIFY
+      ops = {
+        constants.DDM_ADD: add,
+        constants.DDM_ATTACH: attach,
+        constants.DDM_REMOVE: remove,
+        constants.DDM_DETACH: detach,
+        constants.DDM_MODIFY: modify,
+      }
+      count = 0
+      for op, param in ops.items():
+        if param is not _MISSING:
+          count += 1
+          action = op
+      if count > 1:
+        raise errors.OpPrereqError(
+          "Cannot do more than one of the following operations at the"
+          " same time: %s" % ", ".join(ops.keys()),
+          errors.ECODE_INVAL)
 
       assert not (constants.DDMS_VALUES_WITH_MODIFY & set(params.keys()))
 
