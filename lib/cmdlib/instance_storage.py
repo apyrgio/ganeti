@@ -1548,12 +1548,13 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
       when the size is wrong
   @return: False if the operation failed, otherwise a list of
       (host, instance_visible_name, node_visible_name)
-      with the mapping from node devices to instance devices
+      with the mapping from node devices to instance devices, as well as the
+      payloads of the RPC calls
 
   """
   device_info = []
   disks_ok = True
-  results = []
+  payloads = []
 
   if disks is None:
     # only mark instance disks as active if all disks are affected
@@ -1606,7 +1607,7 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
         node_disk.UnsetSize()
       result = lu.rpc.call_blockdev_assemble(node_uuid, (node_disk, instance),
                                              instance, True, idx)
-      results.append(result)
+      payloads.append(result.payload)
       msg = result.fail_msg
       if msg:
         lu.LogWarning("Could not prepare block device %s on node %s"
@@ -1622,7 +1623,7 @@ def AssembleInstanceDisks(lu, instance, disks=None, ignore_secondaries=False,
   if not disks_ok:
     lu.cfg.MarkInstanceDisksInactive(instance.uuid)
 
-  return disks_ok, device_info, results
+  return disks_ok, device_info, payloads
 
 
 def StartInstanceDisks(lu, instance, force):
