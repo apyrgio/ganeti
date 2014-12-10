@@ -1598,7 +1598,7 @@ class LUInstanceSetParams(LogicalUnit):
 
     """
     disk = self.GenericGetDiskInfo(**params) # pylint: disable=W0142
-    self.cfg.AttachInstanceDisk(self.instance.uuid, disk, idx)
+    self.cfg.AttachInstanceDisk(self.instance.uuid, disk.uuid, idx)
 
     # re-read the instance from the configuration
     self.instance = self.cfg.GetInstanceInfo(self.instance.uuid)
