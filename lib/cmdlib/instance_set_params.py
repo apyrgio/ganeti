@@ -1598,7 +1598,9 @@ class LUInstanceSetParams(LogicalUnit):
     """Attaches an existing disk to an instance.
 
     """
-    disk = self.GenericGetDiskInfo(**params) # pylint: disable=W0142
+    uuid = params.get("uuid", None)
+    name = params.get("name", None)
+    disk = self.GenericGetDiskInfo(uuid, name)
     self.cfg.AttachInstanceDisk(self.instance.uuid, disk.uuid, idx)
 
     # re-read the instance from the configuration
