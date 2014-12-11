@@ -962,35 +962,45 @@ class TestIndexOperations(unittest.TestCase):
 
   """Test if index operations on containers work as expected."""
 
-  def testGetIndexFromIdentifier(self):
-    """Test if an identifier is correctly translated to a container index."""
-    container = []
+  def testGetIndexFromIdentifierTail(self):
+    """Check if -1 is translated to tail index."""
+    container = ['item1134']
 
-    # Check if -1 is translated to tail index
     idx = instance_utils.GetIndexFromIdentifier("-1", "test", container)
-    self.assertEqual(0, idx)
+    self.assertEqual(1, idx)
+
+  def testGetIndexFromIdentifierEmpty(self):
+    """Check if empty containers return 0 as index."""
+    container = []
 
     idx = instance_utils.GetIndexFromIdentifier("0", "test", container)
     self.assertEqual(0, idx)
+    idx = instance_utils.GetIndexFromIdentifier("-1", "test", container)
+    self.assertEqual(0, idx)
 
-    # Check if wrong input raises an exception
-    with self.assertRaises(errors.OpPrereqError) as cm:
-      instance_utils.GetIndexFromIdentifier("lala", "test", container)
-    self.assertEqual(cm.exception[0], "Only positive integer or -1 is"
-                     " accepted as identifier for add/attach")
-    self.assertEqual(cm.exception[1], "wrong_input")
+  def testGetIndexFromIdentifierError(self):
+    """Check if wrong input raises an exception."""
+    container = []
 
-    # Check for off-by-one errors
-    with self.assertRaises(IndexError) as cm:
-      instance_utils.GetIndexFromIdentifier("1", "test", container)
-    self.assertEqual(cm.exception.message, "Got test index 1, but there are"
-                     " only 0")
+    self.assertRaises(errors.OpPrereqError,
+                      instance_utils.GetIndexFromIdentifier,
+                      "lala", "test", container)
 
-    # Check if large negative numbers raise exception
-    with self.assertRaises(IndexError) as cm:
-      instance_utils.GetIndexFromIdentifier("-1134", "test", container)
-    self.assertEqual(cm.exception.message, "Not accepting negative indices"
-                     " other than -1")
+  def testGetIndexFromIdentifierOffByOne(self):
+    """Check for off-by-one errors."""
+    container = []
+
+    self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
+                      "1", "test", container)
+
+  def testGetIndexFromIdentifierOutOfRange(self):
+    """Check for identifiers out of the container range."""
+    container = []
+
+    self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
+                      "-1134", "test", container)
+    self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
+                      "1134", "test", container)
 
   def testInsertItemtoIndex(self):
     """Test if we can insert an item to a container at a specified index."""
