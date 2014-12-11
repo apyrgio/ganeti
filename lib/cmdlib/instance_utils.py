@@ -921,7 +921,7 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
       else:
         (item, changes) = create_fn(addidx, params, private)
 
-      InsertItemToIndex(int(identifier), item, container)
+      InsertItemToIndex(identifier, item, container)
 
       if post_add_fn is not None:
         post_add_fn(addidx, item)
@@ -933,7 +933,7 @@ def ApplyContainerMods(kind, container, chgdesc, mods,
       else:
         (item, changes) = attach_fn(addidx, params, private)
 
-      InsertItemToIndex(int(identifier), item, container)
+      InsertItemToIndex(identifier, item, container)
 
       if post_add_fn is not None:
         post_add_fn(addidx, item)
@@ -1018,30 +1018,49 @@ def GetIndexFromIdentifier(identifier, kind, container):
   """Check if the identifier represents a valid container index and return it.
 
   Used in "add" and "attach" actions.
+
+  @type identifier: string
+  @param identifier: Item index or name or UUID
+  @type kind: string
+  @param kind: Type of item, e.g. "disk", "nic"
+  @type container: list
+  @param container: Container to calculate the index from
+
   """
   try:
     idx = int(identifier)
   except ValueError:
-    raise errors.OpPrereqError("Only positive integer or -1 is accepted as"
-                               " identifier for add/attach", errors.ECODE_INVAL)
+    raise errors.OpPrereqError("Only positive integer or -1 is accepted",
+                               errors.ECODE_INVAL)
   if idx == -1:
-    addidx = len(container)
+    return len(container)
   else:
     if idx < 0:
       raise IndexError("Not accepting negative indices other than -1")
     elif idx > len(container):
       raise IndexError("Got %s index %s, but there are only %s" %
                         (kind, idx, len(container)))
-    addidx = idx
-
-  return addidx
+  return idx
 
 
-def InsertItemToIndex(idx, item, container):
+def InsertItemToIndex(identifier, item, container):
   """Insert an item to the provided index of a container.
 
   Used in "add" and "attach" actions.
+
+  @type identifier: string
+  @param identifier: Item index
+  @type item: object
+  @param item: The item to be inserted
+  @type container: list
+  @param container: Container to insert the item to
+
   """
+  try:
+    idx = int(identifier)
+  except ValueError:
+    raise errors.OpPrereqError("Only positive integer or -1 is accepted",
+                               errors.ECODE_INVAL)
   if idx == -1:
     container.append(item)
   else:
