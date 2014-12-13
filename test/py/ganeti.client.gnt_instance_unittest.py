@@ -135,13 +135,18 @@ class TestConvertNicDiskModifications(unittest.TestCase):
     self.assertEqual(fn([]), [])
 
     # Error cases
-    for op in [constants.DDM_REMOVE, constants.DDM_DETACH]:
-      self.assertRaises(errors.OpPrereqError, fn, [
-        (op, { "param": "value", }),
-        ])
-      self.assertRaises(errors.OpPrereqError, fn, [
-        (0, { op: True, "param": "value", }),
-        ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (constants.DDM_REMOVE, { "param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (0, { constants.DDM_REMOVE: True, "param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (constants.DDM_DETACH, { "param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (0, { constants.DDM_DETACH: True, "param": "value", }),
+      ])
 
     self.assertRaises(errors.OpPrereqError, fn, [
       (0, {
