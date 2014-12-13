@@ -129,19 +129,24 @@ class TestConsole(unittest.TestCase):
 
 
 class TestConvertNicDiskModifications(unittest.TestCase):
-  def test(self):
+  def testErrorMods(self):
     fn = gnt_instance._ConvertNicDiskModifications
 
     self.assertEqual(fn([]), [])
 
     # Error cases
-    for op in [constants.DDM_REMOVE, constants.DDM_DETACH]:
-      self.assertRaises(errors.OpPrereqError, fn, [
-        (op, { "param": "value", }),
-        ])
-      self.assertRaises(errors.OpPrereqError, fn, [
-        (0, { op: True, "param": "value", }),
-        ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (constants.DDM_REMOVE, {"param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (0, {constants.DDM_REMOVE: True, "param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (constants.DDM_DETACH, {"param": "value", }),
+      ])
+    self.assertRaises(errors.OpPrereqError, fn, [
+      (0, {constants.DDM_DETACH: True, "param": "value", }),
+      ])
 
     self.assertRaises(errors.OpPrereqError, fn, [
       (0, {
@@ -156,7 +161,9 @@ class TestConvertNicDiskModifications(unittest.TestCase):
         }),
       ])
 
-    # Legacy calls
+  def testLegacyCalls(self):
+    fn = gnt_instance._ConvertNicDiskModifications
+
     for action in constants.DDMS_VALUES:
       self.assertEqual(fn([
         (action, {}),
@@ -180,7 +187,9 @@ class TestConvertNicDiskModifications(unittest.TestCase):
         }),
       ])
 
-    # New-style calls
+  def testNewStyleCalls(self):
+    fn = gnt_instance._ConvertNicDiskModifications
+
     self.assertEqual(fn([
       (2, {
         constants.IDISK_MODE: constants.DISK_RDWR,
@@ -221,7 +230,9 @@ class TestConvertNicDiskModifications(unittest.TestCase):
         }),
       ])
 
-    # Names and UUIDs
+  def testNamesUUIDs(self):
+    fn = gnt_instance._ConvertNicDiskModifications
+
     self.assertEqual(fn([
       ('name', {
         constants.IDISK_MODE: constants.DISK_RDWR,
