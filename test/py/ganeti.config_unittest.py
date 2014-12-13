@@ -702,47 +702,39 @@ class TestConfigRunner(unittest.TestCase):
     cfg.AddInstance(inst, "my-job")
     cfg.AddInstanceDisk(inst.uuid, disk)
 
-    # Test 1a - Detach disk from non-existent instance
-    with self.assertRaises(errors.ConfigurationError) as cm:
-      cfg.DetachInstanceDisk("1134", "disk0")
-    self.assertEqual(cm.exception.message, "Instance 1134 doesn't exist")
+    # Detach disk from non-existent instance
+    self.assertRaises(errors.ConfigurationError, cfg.DetachInstanceDisk,
+                      "1134", "disk0")
 
-    # Test 1b - Detach non-existent disk
-    with self.assertRaises(errors.ConfigurationError) as cm:
-      cfg.DetachInstanceDisk("test-uuid", "disk1")
-    self.assertEqual(cm.exception.message, "Disk disk1 doesn't exist")
+    # Detach non-existent disk
+    self.assertRaises(errors.ConfigurationError, cfg.DetachInstanceDisk,
+                      "test-uuid", "disk1")
 
-    # Test 1c - Detach disk
+    # Detach disk
     cfg.DetachInstanceDisk("test-uuid", "disk0")
     instance_disks = cfg.GetInstanceDisks("test-uuid")
     self.assertEqual(instance_disks, [])
 
-    # Test 1d - Detach disk again
-    with self.assertRaises(errors.ProgrammerError) as cm:
-      cfg.DetachInstanceDisk("test-uuid", "disk0")
-    self.assertEqual(cm.exception.message, "Disk disk0 is not attached to an"
-                     " instance")
+    # Detach disk again
+    self.assertRaises(errors.ProgrammerError, cfg.DetachInstanceDisk,
+                      "test-uuid", "disk0")
 
-    # Test 2a - Attach disk to non-existent instance
-    with self.assertRaises(errors.ConfigurationError) as cm:
-      cfg.AttachInstanceDisk("1134", disk)
-    self.assertEqual(cm.exception.message, "Instance 1134 doesn't exist")
+    # Attach disk to non-existent instance
+    self.assertRaises(errors.ConfigurationError, cfg.AttachInstanceDisk,
+                      "1134", "disk0")
 
-    # Test 2b - Attach non-existent disk
-    with self.assertRaises(errors.ConfigurationError) as cm:
-      cfg.AttachInstanceDisk("test-uuid", fake_disk)
-    self.assertEqual(cm.exception.message, "Disk disk1 doesn't exist")
+    # Attach non-existent disk
+    self.assertRaises(errors.ConfigurationError, cfg.AttachInstanceDisk,
+                      "test-uuid", "disk1")
 
-    # Test 2c - Attach disk
-    cfg.AttachInstanceDisk("test-uuid", disk)
+    # Attach disk
+    cfg.AttachInstanceDisk("test-uuid", "disk0")
     instance_disks = cfg.GetInstanceDisks("test-uuid")
     self.assertEqual(instance_disks, [disk])
 
-    # Test 2d - Attach disk again
-    with self.assertRaises(errors.ReservationError) as cm:
-      cfg.AttachInstanceDisk("test-uuid", disk)
-    self.assertEqual(cm.exception.message, "Disk disk0 already attached to"
-                     " instance test.example.com")
+    # Attach disk again
+    self.assertRaises(errors.ReservationError, cfg.AttachInstanceDisk,
+                      "test-uuid", "disk0")
 
 
 def _IsErrorInList(err_str, err_list):
