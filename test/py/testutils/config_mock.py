@@ -389,7 +389,7 @@ class ConfigMock(config.ConfigWriter):
                  dev_type=constants.DT_PLAIN,
                  logical_id=None,
                  children=None,
-                 nodes=[],
+                 nodes=None,
                  iv_name=None,
                  size=1024,
                  mode=constants.DISK_RDWR,
@@ -441,7 +441,7 @@ class ConfigMock(config.ConfigWriter):
                                      size=constants.DRBD_META_SIZE)
         children = [data_child, meta_child]
 
-      if nodes is []:
+      if nodes is None:
         nodes = [pnode_uuid, snode_uuid]
     elif dev_type == constants.DT_PLAIN:
       if logical_id is None:
