@@ -389,7 +389,7 @@ class ConfigMock(config.ConfigWriter):
                  dev_type=constants.DT_PLAIN,
                  logical_id=None,
                  children=None,
-                 nodes=[],
+                 nodes=None,
                  iv_name=None,
                  size=1024,
                  mode=constants.DISK_RDWR,
@@ -441,17 +441,17 @@ class ConfigMock(config.ConfigWriter):
                                      size=constants.DRBD_META_SIZE)
         children = [data_child, meta_child]
 
-      if nodes is []:
+      if nodes is None:
         nodes = [pnode_uuid, snode_uuid]
     elif dev_type == constants.DT_PLAIN:
       if logical_id is None:
         logical_id = ("mockvg", "mock_disk_%d" % disk_id)
-      if nodes == [] and primary_node is not None:
+      if nodes is None and primary_node is not None:
           nodes = [primary_node]
     elif dev_type in constants.DTS_FILEBASED:
       if logical_id is None:
         logical_id = (constants.FD_LOOP, "/file/storage/disk%d" % disk_id)
-      if (nodes == [] and primary_node is not None and
+      if (nodes is None and primary_node is not None and
           dev_type == constants.DT_FILE):
           nodes = [primary_node]
     elif dev_type == constants.DT_BLOCK:
@@ -468,6 +468,8 @@ class ConfigMock(config.ConfigWriter):
       raise NotImplementedError
     if children is None:
       children = []
+    if nodes is None:
+      nodes = []
     if iv_name is None:
       iv_name = "disk/%d" % instance_disk_index
 

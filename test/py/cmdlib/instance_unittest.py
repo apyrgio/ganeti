@@ -2470,7 +2470,7 @@ class TestLUInstanceSetParams(CmdlibTestCase):
     self.ExecOpCodeExpectException(
       op, errors.TypeEnforcementError, "is not a valid size")
 
-  def testAddDiskUnkownParam(self):
+  def testAddDiskUnknownParam(self):
     op = self.CopyOpCode(self.op,
                          disks=[[constants.DDM_ADD, -1,
                                  {
@@ -2552,7 +2552,6 @@ class TestLUInstanceSetParams(CmdlibTestCase):
 
   def testAttachDiskWrongParams(self):
     msg = "Only one argument is permitted in attach op, either name or uuid"
-    self.cfg.AddOrphanDisk()
     op = self.CopyOpCode(self.op,
                          disks=[[constants.DDM_ATTACH, -1,
                                  {
@@ -2695,18 +2694,18 @@ class TestLUInstanceSetParams(CmdlibTestCase):
 
     Also, check if the operations succeed both with name and uuid.
     """
-    inst = self.cfg.AddNewInstance(disks=[
-      self.cfg.CreateDisk(uuid="mock_uuid_1134"),
-      self.cfg.CreateDisk(name="mock_name_1134")
-    ])
-    disks = self.cfg.GetInstanceDisks(inst.uuid)
-    disks.reverse()
+    disk1 = self.cfg.CreateDisk(uuid="mock_uuid_1134")
+    disk2 = self.cfg.CreateDisk(name="mock_name_1134")
+
+    inst = self.cfg.AddNewInstance(disks=[disk1, disk2])
 
     op = self.CopyOpCode(self.op,
                          instance_name=inst.name,
                          disks=[[constants.DDM_DETACH, "mock_uuid_1134",
                                  {}]])
     self.ExecOpCode(op)
+    self.assertEqual([disk2], self.cfg.GetInstanceDisks(inst.uuid))
+
     op = self.CopyOpCode(self.op,
                          instance_name=inst.name,
                          disks=[[constants.DDM_ATTACH, 0,
@@ -2714,11 +2713,15 @@ class TestLUInstanceSetParams(CmdlibTestCase):
                                    'uuid': "mock_uuid_1134"
                                  }]])
     self.ExecOpCode(op)
+    self.assertEqual([disk1, disk2], self.cfg.GetInstanceDisks(inst.uuid))
+
     op = self.CopyOpCode(self.op,
                          instance_name=inst.name,
                          disks=[[constants.DDM_DETACH, "mock_name_1134",
                                  {}]])
     self.ExecOpCode(op)
+    self.assertEqual([disk1], self.cfg.GetInstanceDisks(inst.uuid))
+
     op = self.CopyOpCode(self.op,
                          instance_name=inst.name,
                          disks=[[constants.DDM_ATTACH, 0,
@@ -2726,7 +2729,7 @@ class TestLUInstanceSetParams(CmdlibTestCase):
                                    constants.IDISK_NAME: "mock_name_1134"
                                  }]])
     self.ExecOpCode(op)
-    self.assertEqual(disks, self.cfg.GetInstanceDisks(inst.uuid))
+    self.assertEqual([disk2, disk1], self.cfg.GetInstanceDisks(inst.uuid))
 
   def testModifyDiskWithSize(self):
     op = self.CopyOpCode(self.op,
