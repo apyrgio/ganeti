@@ -1286,8 +1286,8 @@ def _ConvertNicDiskModifications(mods):
         constants.DDM_ADD: add,
         constants.DDM_ATTACH: attach,
         constants.DDM_REMOVE: remove,
-        constants.DDM_DETACH: detach
-        constants.DDM_MODIFY: modify
+        constants.DDM_DETACH: detach,
+        constants.DDM_MODIFY: modify,
       }
       count = 0
       for op, param in ops.items():
