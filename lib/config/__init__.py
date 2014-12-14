@@ -1375,7 +1375,7 @@ class ConfigWriter(object):
     if not self._offline:
       self._wconfd.ReleaseDRBDMinors(disk_uuid)
 
-  @_ConfigSync()
+  @ConfigSync()
   def ReleaseDRBDMinors(self, disk_uuid):
     """Release temporary drbd minors allocated for a given disk.
 
