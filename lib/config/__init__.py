@@ -530,7 +530,7 @@ class ConfigWriter(object):
 
     return disk
 
-  @_ConfigSync(shared=1)
+  @ConfigSync(shared=1)
   def GetDiskInfoByName(self, disk_name):
     """Return information about a named disk.
 
