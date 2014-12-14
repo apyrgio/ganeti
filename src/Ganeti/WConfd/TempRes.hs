@@ -261,7 +261,7 @@ allocateDRBDMinor cfg disk nodes = do
   let alloc :: S.Set DRBDMinor -> Map DRBDMinor DiskUUID
             -> (DRBDMinor, Map DRBDMinor DiskUUID)
       alloc used m = let k = findFirst 0 (M.keysSet m `S.union` used)
-                      in (k, M.insert k disk m)
+                     in (k, M.insert k disk m)
   forM nodes $ \node -> trsDRBDL . maybeLens (at node)
                         %%= alloc (M.findWithDefault mempty node usedMap)
 

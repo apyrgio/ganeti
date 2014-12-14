@@ -538,7 +538,7 @@ def CheckRADOSFreeSpace():
 
 
 def _GenerateDRBD8Branch(lu, primary_uuid, secondary_uuid, size, vgnames, names,
-                         iv_name, p_minor, s_minor, forthcoming=False):
+                         iv_name, forthcoming=False):
   """Generate a drbd8 device complete with its children.
 
   """
