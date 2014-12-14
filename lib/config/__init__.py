@@ -547,7 +547,7 @@ class ConfigWriter(object):
     """
     return self._ConfigData().disks.keys()
 
-  @_ConfigSync(shared=1)
+  @ConfigSync(shared=1)
   def GetAllDisksInfo(self):
     """Get the configuration of all disks.
 
