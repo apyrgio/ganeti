@@ -547,7 +547,7 @@ class ConfigWriter(object):
     """
     return self._ConfigData().disks.keys()
 
-  @_ConfigSync(shared=1)
+  @ConfigSync(shared=1)
   def GetAllDisksInfo(self):
     """Get the configuration of all disks.
 
@@ -3569,9 +3569,6 @@ class ConfigWriter(object):
   def _UnlockedGetAllDiskInfo(self):
     return dict((disk_uuid, self._UnlockedGetDiskInfo(disk_uuid))
                 for disk_uuid in self._UnlockedGetDiskList())
-
-  def _UnlockedGetDiskList(self):
-    return self._ConfigData().disks.keys()
 
   @ConfigSync(shared=1)
   def GetInstanceForDisk(self, disk_uuid):
