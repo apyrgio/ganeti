@@ -403,7 +403,7 @@ class ConfigWriter(object):
     self._UnlockedAddDisk(disk, replace=replace)
     self._UnlockedAttachInstanceDisk(inst_uuid, disk.uuid, idx)
 
-  @_ConfigSync()
+  @ConfigSync()
   def AttachInstanceDisk(self, inst_uuid, disk_uuid, idx=None):
     """Attach an existing disk to an instance.
 
@@ -472,7 +472,7 @@ class ConfigWriter(object):
     self._UnlockedDetachInstanceDisk(inst_uuid, disk_uuid)
     self._UnlockedRemoveDisk(disk_uuid)
 
-  @_ConfigSync()
+  @ConfigSync()
   def DetachInstanceDisk(self, inst_uuid, disk_uuid):
     """Detach a disk from an instance.
 
