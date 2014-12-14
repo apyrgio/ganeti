@@ -321,8 +321,8 @@ def _DoBatch(retry):
 class FeedbackAccumulator(object):
   """Feedback accumulator class."""
 
-  self._feed_buf = StringIO()
-  self.opts = None
+  _feed_buf = StringIO()
+  opts = None
 
   def ClearFeedbackBuf(self):
     """Clear the feedback buffer."""
