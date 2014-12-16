@@ -721,20 +721,20 @@ class TestConfigRunner(unittest.TestCase):
 
     # Attach disk to non-existent instance
     self.assertRaises(errors.ConfigurationError, cfg.AttachInstanceDisk,
-                      "1134", disk)
+                      "1134", "disk0")
 
     # Attach non-existent disk
     self.assertRaises(errors.ConfigurationError, cfg.AttachInstanceDisk,
-                      "test-uuid", fake_disk)
+                      "test-uuid", "disk1")
 
     # Attach disk
-    cfg.AttachInstanceDisk("test-uuid", disk)
+    cfg.AttachInstanceDisk("test-uuid", "disk0")
     instance_disks = cfg.GetInstanceDisks("test-uuid")
     self.assertEqual(instance_disks, [disk])
 
     # Attach disk again
     self.assertRaises(errors.ReservationError, cfg.AttachInstanceDisk,
-                      "test-uuid", disk)
+                      "test-uuid", "disk0")
 
 
 def _IsErrorInList(err_str, err_list):
