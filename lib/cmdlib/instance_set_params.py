@@ -97,17 +97,16 @@ class LUInstanceSetParams(LogicalUnit):
 
     In case of an error, raise the appropriate exceptions.
     """
-    name = constants.IDISK_NAME
     if uuid:
-      disk = self.cfg.GetDiskInfo(params["uuid"])
+      disk = self.cfg.GetDiskInfo(uuid)
       if disk is None:
         raise errors.OpPrereqError("No disk was found with this UUID: %s" %
-                                   params["uuid"], errors.ECODE_INVAL)
+                                   uuid, errors.ECODE_INVAL)
     elif name:
-      disk = self.cfg.GetDiskInfoByName(params[name])
+      disk = self.cfg.GetDiskInfoByName(name)
       if disk is None:
-        raise errors.OpPrereqError("No disk was found with this %s: %s" %
-                                   (name, params[name]), errors.ECODE_INVAL)
+        raise errors.OpPrereqError("No disk was found with this name: %s" %
+                                   name, errors.ECODE_INVAL)
     else:
       raise errors.ProgrammerError("No disk UUID or name was given")
 
