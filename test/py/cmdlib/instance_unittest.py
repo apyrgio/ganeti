@@ -984,23 +984,23 @@ class TestIndexOperations(unittest.TestCase):
 
     self.assertRaises(errors.OpPrereqError,
                       instance_utils.GetIndexFromIdentifier,
-                      ("lala", "test", container))
+                      "lala", "test", container)
 
   def testGetIndexFromIdentifierOffByOne(self):
     """Check for off-by-one errors."""
     container = []
 
     self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
-                      ("1", "test", container))
+                      "1", "test", container)
 
   def testGetIndexFromIdentifierOutOfRange(self):
     """Check for identifiers out of the container range."""
     container = []
 
     self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
-                      ("-1134", "test", container))
+                      "-1134", "test", container)
     self.assertRaises(IndexError, instance_utils.GetIndexFromIdentifier,
-                      ("1134", "test", container))
+                      "1134", "test", container)
 
   def testInsertItemtoIndex(self):
     """Test if we can insert an item to a container at a specified index."""
