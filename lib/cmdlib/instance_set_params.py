@@ -1599,7 +1599,10 @@ class LUInstanceSetParams(LogicalUnit):
     """Attaches an existing disk to an instance.
 
     """
-    disk = self.GenericGetDiskInfo(**params) # pylint: disable=W0142
+    uuid = params.get("uuid", None)
+    name = params.get(constants.IDISK_NAME, None)
+
+    disk = self.GenericGetDiskInfo(uuid, name)
     self.cfg.AttachInstanceDisk(self.instance.uuid, disk.uuid, idx)
 
     # re-read the instance from the configuration
@@ -1610,14 +1613,14 @@ class LUInstanceSetParams(LogicalUnit):
        "attach:size=%s,mode=%s" % (disk.size, disk.mode)),
       ]
 
-    if self.op.hotplug:
-      disks_ok, _, results = AssembleInstanceDisks(self, self.instance,
-                                                   disks=[disk])
-      if not disks_ok:
-        changes.append(("disk/%d" % idx, "assemble:failed"))
-        return disk, changes
+    disks_ok, _, payloads = AssembleInstanceDisks(self, self.instance,
+                                                  disks=[disk])
+    if not disks_ok:
+      changes.append(("disk/%d" % idx, "assemble:failed"))
+      return disk, changes
 
-      _, link_name, uri = results[0].payload
+    if self.op.hotplug:
+      _, link_name, uri = payloads[0]
       msg = self._HotplugDevice(constants.HOTPLUG_ACTION_ADD,
                                 constants.HOTPLUG_TARGET_DISK,
                                 disk, (link_name, uri), idx)
